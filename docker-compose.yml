@@ -1,0 +1,68 @@
+# ============================================================================
+# Pi-hole DNS Server с автоматическим SSL
+# Документация: https://github.com/pi-hole/docker-pi-hole/
+# Все настройки в .env файле
+# ============================================================================
+
+services:
+  # ==========================================================================
+  # Pi-hole DNS сервер
+  # ==========================================================================
+  pihole:
+    container_name: pihole
+    image: pihole/pihole:latest
+    ports:
+      # DNS порты
+      - "${DNS_BIND_IP:-127.0.0.1}:${DNS_PORT:-53}:53/tcp"
+      - "${DNS_BIND_IP:-127.0.0.1}:${DNS_PORT:-53}:53/udp"
+      # Веб-панель
+      - "${WEB_BIND_IP:-127.0.0.1}:${WEB_HTTP_PORT:-8080}:80/tcp"
+      - "${WEB_BIND_IP:-127.0.0.1}:${WEB_HTTPS_PORT:-8443}:443/tcp"
+    environment:
+      # Основные настройки
+      TZ: ${TZ:-Europe/Moscow}
+      FTLCONF_webserver_api_password: ${FTLCONF_webserver_api_password:-admin}
+      # DNS настройки
+      FTLCONF_dns_listeningMode: ${FTLCONF_dns_listeningMode:-ALL}
+      FTLCONF_dns_dnssec: ${FTLCONF_dns_dnssec:-false}
+      FTLCONF_dns_queryLogging: ${FTLCONF_dns_queryLogging:-true}
+      # Кэш
+      FTLCONF_dns_cache_size: ${FTLCONF_dns_cache_size:-10000}
+      FTLCONF_dns_blockTTL: ${FTLCONF_dns_blockTTL:-2}
+      # Сессия
+      FTLCONF_webserver_session_timeout: ${FTLCONF_webserver_session_timeout:-1800}
+    volumes:
+      # База данных и конфигурация Pi-hole
+      - './etc-pihole:/etc/pihole'
+      # SSL сертификаты Let's Encrypt
+      - '/etc/letsencrypt:/etc/letsencrypt:ro'
+    cap_add:
+      # Для DHCP сервера (опционально)
+      - NET_ADMIN
+      # Для синхронизации времени NTP
+      - SYS_TIME
+      # Дополнительный приоритет процесса
+      - SYS_NICE
+    restart: unless-stopped
+
+  # ==========================================================================
+  # Certbot для автоматического получения и обновления SSL сертификатов
+  # Запускается автоматически если PIHOLE_DOMAIN указан в .env
+  # ==========================================================================
+  certbot:
+    image: certbot/certbot:latest
+    container_name: pihole_certbot
+    volumes:
+      - /etc/letsencrypt:/etc/letsencrypt
+      - ./certbot-logs:/var/log/letsencrypt
+      - ./certbot-init.sh:/certbot-init.sh:ro
+    env_file:
+      - .env
+    # Автоматический выпуск и обновление сертификатов
+    entrypoint: [ "/bin/sh", "/certbot-init.sh" ]
+    network_mode: host
+    restart: unless-stopped
+
+networks:
+  default:
+    name: pihole-network
