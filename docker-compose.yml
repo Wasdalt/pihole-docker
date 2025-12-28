@@ -12,7 +12,7 @@ services:
     container_name: pihole
     image: pihole/pihole:latest
     ports:
-      # DNS порты
+      # DNS порты (привязка к DNS_BIND_IP)
       - "${DNS_BIND_IP:-127.0.0.1}:${DNS_PORT:-53}:53/tcp"
       - "${DNS_BIND_IP:-127.0.0.1}:${DNS_PORT:-53}:53/udp"
       # Веб-панель

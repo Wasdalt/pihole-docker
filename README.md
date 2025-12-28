@@ -5,11 +5,9 @@
 ## Быстрый старт
 
 ```bash
-# 1. Настройте конфигурацию
 cp .env.example .env
 nano .env
 
-# 2. Запустите Pi-hole
 sudo docker compose up -d
 ```
 
@@ -19,7 +17,90 @@ sudo docker compose up -d
 
 ## Настройка DNS на хосте (опционально)
 
-> **Примечание:** Эта настройка нужна только если вы хотите чтобы **сам сервер** использовал Pi-hole для DNS. Для VPN клиентов (3x-ui и др.) достаточно указать `127.0.0.1:53` в настройках DNS.
+> **Примечание:** Эта настройка нужна только если вы хотите чтобы **сам сервер** использовал Pi-hole для DNS.
+
+---
+
+## DNS для Docker контейнеров (3x-ui, Xray и др.)
+
+### Если контейнер использует `network_mode: host` (рекомендуется)
+
+Контейнеры с `network_mode: host` видят сеть хоста напрямую.
+
+**В настройках DNS указывайте:**
+```json
+"dns": {
+  "servers": [
+    {
+      "address": "localhost",
+      "port": 53
+    }
+  ]
+}
+```
+
+> [!TIP]
+> Проверить режим сети: `docker inspect CONTAINER --format '{{.HostConfig.NetworkMode}}'`
+
+---
+
+### Если контейнер НЕ использует `network_mode: host`
+
+Обычные Docker контейнеры изолированы от хоста. `localhost:53` внутри контейнера — это DNS самого контейнера, а не Pi-hole.
+
+**Решение — использовать Docker bridge IP:**
+
+```bash
+# Узнать Docker bridge IP
+sudo docker network inspect bridge | grep Gateway
+# Обычно: 172.17.0.1
+```
+
+**В настройках DNS указывайте:**
+```json
+"dns": {
+  "servers": [
+    {
+      "address": "172.17.0.1",  // ← ваш Docker bridge IP
+      "port": 53
+    }
+  ]
+}
+```
+
+> [!WARNING]
+> При этом нужно добавить binding в `docker-compose.yml`:
+> ```yaml
+> - "172.17.0.1:53:53/tcp"
+> - "172.17.0.1:53:53/udp"
+> ```
+
+### Проверка DNS из контейнера
+
+```bash
+# Для network_mode: host
+sudo docker exec 3xui_app nslookup google.com localhost
+
+# Для обычных контейнеров
+sudo docker exec CONTAINER nslookup google.com 172.17.0.1
+```
+
+### Устранение неполадок
+
+```bash
+# 1. Проверить что Pi-hole запущен
+sudo docker ps | grep pihole
+
+# 2. Проверить режим сети контейнера
+sudo docker inspect 3xui_app --format '{{.HostConfig.NetworkMode}}'
+
+# 3. Перезапустить Pi-hole
+sudo docker compose down && sudo docker compose up -d
+
+# 4. После изменения DNS в 3x-ui — перезапустить
+sudo docker restart 3xui_app
+```
+
 
 ### Включение (systemd-resolved → Pi-hole)
 
@@ -50,6 +131,18 @@ sudo systemctl restart systemd-resolved
 ```bash
 cat /etc/resolv.conf | grep nameserver
 dig google.com @127.0.0.1
+```
+
+### Ошибка "unable to resolve host"
+
+Если после отключения `DNSStubListener` появляется ошибка:
+```
+sudo: unable to resolve host HOSTNAME: Name or service not known
+```
+
+Добавьте hostname в `/etc/hosts`:
+```bash
+grep -q "$(hostname)" /etc/hosts || echo "127.0.0.1 $(hostname)" | sudo tee -a /etc/hosts
 ```
 
 ---
@@ -160,6 +253,9 @@ sudo docker compose down
 
 # Перезапуск
 sudo docker compose restart
+sudo docker compose down && sudo docker compose up -d
+
+
 
 # Логи Pi-hole
 sudo docker logs pihole
