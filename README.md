@@ -17,6 +17,39 @@ sudo docker compose up -d
 
 ---
 
+## Настройка DNS на хосте (systemd-resolved)
+
+Если на сервере используется `systemd-resolved` (по умолчанию в Ubuntu/Debian), нужно перенаправить DNS-запросы через Pi-hole:
+
+```bash
+# 1. Создать конфигурацию для systemd-resolved
+sudo mkdir -p /etc/systemd/resolved.conf.d/
+sudo tee /etc/systemd/resolved.conf.d/pihole.conf << 'EOF'
+[Resolve]
+DNS=127.0.0.1
+DNSStubListener=no
+EOF
+
+# 2. Перезапустить systemd-resolved
+sudo systemctl restart systemd-resolved
+
+# 3. Обновить симлинк resolv.conf
+sudo ln -sf /run/systemd/resolve/resolv.conf /etc/resolv.conf
+```
+
+Проверка:
+```bash
+# Должен показать 127.0.0.1
+cat /etc/resolv.conf | grep nameserver
+
+# Тест DNS через Pi-hole
+dig google.com @127.0.0.1
+```
+
+> **Примечание:** Без этой настройки система будет использовать `systemd-resolved` (127.0.0.53), а не Pi-hole.
+
+---
+
 ## Конфигурация (.env)
 
 ### Основные параметры
