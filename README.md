@@ -17,12 +17,14 @@ sudo docker compose up -d
 
 ---
 
-## Настройка DNS на хосте (systemd-resolved)
+## Настройка DNS на хосте (опционально)
 
-Если на сервере используется `systemd-resolved` (по умолчанию в Ubuntu/Debian), нужно перенаправить DNS-запросы через Pi-hole:
+> **Примечание:** Эта настройка нужна только если вы хотите чтобы **сам сервер** использовал Pi-hole для DNS. Для VPN клиентов (3x-ui и др.) достаточно указать `127.0.0.1:53` в настройках DNS.
+
+### Включение (systemd-resolved → Pi-hole)
 
 ```bash
-# 1. Создать конфигурацию для systemd-resolved
+# 1. Создать конфигурацию
 sudo mkdir -p /etc/systemd/resolved.conf.d/
 sudo tee /etc/systemd/resolved.conf.d/pihole.conf << 'EOF'
 [Resolve]
@@ -30,23 +32,25 @@ DNS=127.0.0.1
 DNSStubListener=no
 EOF
 
-# 2. Перезапустить systemd-resolved
+# 2. Применить
 sudo systemctl restart systemd-resolved
-
-# 3. Обновить симлинк resolv.conf
 sudo ln -sf /run/systemd/resolve/resolv.conf /etc/resolv.conf
 ```
 
-Проверка:
-```bash
-# Должен показать 127.0.0.1
-cat /etc/resolv.conf | grep nameserver
+### Отключение (откат к systemd-resolved)
 
-# Тест DNS через Pi-hole
-dig google.com @127.0.0.1
+```bash
+sudo rm /etc/systemd/resolved.conf.d/pihole.conf
+sudo ln -sf /run/systemd/resolve/stub-resolv.conf /etc/resolv.conf
+sudo systemctl restart systemd-resolved
 ```
 
-> **Примечание:** Без этой настройки система будет использовать `systemd-resolved` (127.0.0.53), а не Pi-hole.
+### Проверка
+
+```bash
+cat /etc/resolv.conf | grep nameserver
+dig google.com @127.0.0.1
+```
 
 ---
 
